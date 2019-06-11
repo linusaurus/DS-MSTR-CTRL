@@ -15,15 +15,22 @@
 #include <Ethernet.h>
 #include <PubSubClient.h>
 #include <Automaton.h>
+#include <EEPROM.h>
+
 // *******************************************************************************
 // Pins 
 // *******************************************************************************
- #define masterSwitchPin     2
- #define statusLedPin        3
+ #define masterSwitchPin    2
+ #define downStatusLedPin   3
+ #define connectionLedPin   4
+ #define upStatusLedPin     5
 // Automaton Objects -------------------------------------------------------------
-Atm_led statusLED;
+Atm_led connectionLED;
+Atm_led downStatusLed;
+Atm_led upStatusLed;
 Atm_button masterSwitch;
-// State SYSTEM Flags -------------------------------------------------------------------
+
+// State SYSTEM Flags -----------------------------------------------------------
  bool SYSTEM_STOPPED{false};
  bool SYSTEM_CLOSED{false};
  bool SYSTEM_OPENED{false};
@@ -74,8 +81,11 @@ PubSubClient client(ethclient);
 unsigned long previousMillis;
 unsigned long polling_interval = 1000;
 int position = 0;
+int command{0};
 
 void CheckState(){
+
+  command=EEPROM.read(0);
 
   if (LF1_ONLINE_OK && LF2_ONLINE_OK && LF3_ONLINE_OK && LF4_ONLINE_OK){
     if(!SYSTEM_ONLINE_OK){
@@ -95,6 +105,8 @@ void CheckState(){
     SYSTEM_OPENED=false;
     SYSTEM_IN_MOTION=false;
     Serial.println("SYSTEM STOPPED");
+    downStatusLed.trigger(downStatusLed.EVT_ON);
+    EPProm.write(1,SYSTEM_STOPPED);
     }
 
   }
@@ -105,7 +117,9 @@ void CheckState(){
       SYSTEM_OPENED=false;
       SYSTEM_IN_MOTION=false;
       SYSTEM_STOPPED=false;
-      Serial.println("SYSTEM CLOSED");
+      Serial.print("SYSTEM CLOSED");
+      Serial.println(SYSTEM_CLOSED);
+      downStatusLed.trigger(downStatusLed.EVT_ON);
     } 
   }
 
@@ -117,6 +131,7 @@ void CheckState(){
     SYSTEM_IN_MOTION=false;
     SYSTEM_STOPPED=false;
     Serial.println("SYSTEM OPENED");
+    upStatusLed.trigger(upStatusLed.EVT_ON);
     }
   }
   if (LF1_MOVING && LF2_MOVING & LF3_MOVING && LF4_MOVING)
@@ -125,8 +140,16 @@ void CheckState(){
     SYSTEM_IN_MOTION=true;
     SYSTEM_CLOSED=false;
     SYSTEM_OPENED=false;
+    SYSTEM_STOPPED=false;
     Serial.println("SYSTEM IN MOTION");
+    if(command==1){
+      downStatusLed.trigger(downStatusLed.EVT_BLINK  );
     }
+    else if(command==2){
+      upStatusLed.trigger(upStatusLed.EVT_BLINK  );
+    }
+    }
+    
   }
 
    if (LF1_ERROR || LF2_ERROR || LF3_ERROR || LF4_ERROR){
@@ -136,8 +159,9 @@ void CheckState(){
     SYSTEM_OPENED=false;
     SYSTEM_STOPPED=false;
     Serial.println("SYSTEM ERROR");
+
     }
-  }
+   }
   
 }
 
@@ -265,7 +289,7 @@ void reconnect() {
       Serial.println("connected");
       // Once connected, publish an announcement...
       client.publish("SYS", "1");
-      
+      connectionLED.trigger(connectionLED.EVT_ON);
       // ... and resubscribe
       client.subscribe("STATUS");
     } else {
@@ -280,9 +304,13 @@ void reconnect() {
 
 void button_change( int idx, int v, int up ) {
 
-  Serial.println("Button Pressed -> CLOSE");
-  if (!SYSTEM_CLOSED){
+  
+  if (!SYSTEM_CLOSED || command==1){
+    Serial.println("Button Pressed -> CLOSE");
     client.publish("SIGNAL","1");
+    command=1;
+    EEPROM.write(0,command);
+   
   }
   
   
@@ -290,9 +318,14 @@ void button_change( int idx, int v, int up ) {
 
 void button_release( int idx, int v, int up ) {
 
+ 
+  if(!SYSTEM_OPENED || command==2){
   Serial.println("Button Release -> OPEN");
-  if(!SYSTEM_OPENED){
   client.publish("SIGNAL","2");
+  command=2;
+  EEPROM.write(0,command);
+ 
+ 
   }
   
 }
@@ -311,6 +344,14 @@ void setup() {
   masterSwitch.begin(masterSwitchPin);
   masterSwitch.onPress(button_change);
   masterSwitch.onRelease(button_release);
+  connectionLED.begin(connectionLedPin).blink(40,750);
+  downStatusLed.begin(downStatusLedPin).blink(20,400);
+  upStatusLed.begin(upStatusLedPin).blink(20,400);
+  
+  command = EEPROM.read(0);
+  Serial.print("Command = ");
+  Serial.println(command);
+  
 }
 
 void loop() {
