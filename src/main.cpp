@@ -30,7 +30,7 @@ Atm_led downStatusLed;
 Atm_led upStatusLed;
 Atm_button masterSwitch;
 
-enum state{IDLE, STOPPED,RAISE,LOWERED};
+enum state{IDLE, STOPPED,RAISE,LOWERED,ERROR};
 
 // State SYSTEM Flags -----------------------------------------------------------
  bool SYSTEM_STOPPED{false};
@@ -108,13 +108,7 @@ void CheckState(){
     if (!SYSTEM_CLOSED) {
       
       state = LOWERED;
-      SYSTEM_CLOSED=true;
-      SYSTEM_OPENED=false;
-      SYSTEM_IN_MOTION=false;
-      SYSTEM_STOPPED=false;
-      Serial.print("SYSTEM CLOSED");
-      Serial.println(SYSTEM_CLOSED);
-      downStatusLed.trigger(downStatusLed.EVT_ON);
+     
     } 
   }
 
@@ -146,11 +140,8 @@ void CheckState(){
 
    if (LF1_ERROR || LF2_ERROR || LF3_ERROR || LF4_ERROR){
     if(!SYSTEM_ERROR_STATE){
-    SYSTEM_IN_MOTION=false;
-    SYSTEM_CLOSED=false;
-    SYSTEM_OPENED=false;
-    SYSTEM_STOPPED=false;
-    Serial.println("SYSTEM ERROR");
+      state = ERROR;
+   
 
     }
    }
@@ -188,9 +179,25 @@ void StateMachine(state STATE){
     upStatusLed.trigger(upStatusLed.EVT_ON);
   }
   case LOWERED:{
-
+    
+      SYSTEM_CLOSED=true;
+      SYSTEM_OPENED=false;
+      SYSTEM_IN_MOTION=false;
+      SYSTEM_STOPPED=false;
+      Serial.print("SYSTEM CLOSED");
+      Serial.println(SYSTEM_CLOSED);
+      downStatusLed.trigger(downStatusLed.EVT_ON);
 
   }
+  case ERROR:{
+
+    SYSTEM_IN_MOTION=false;
+    SYSTEM_CLOSED=false;
+    SYSTEM_OPENED=false;
+    SYSTEM_STOPPED=false;
+    Serial.println("SYSTEM ERROR");
+  }
+  
   
 }
 
