@@ -51,6 +51,8 @@ Atm_led downStatusLed;
 Atm_led upStatusLed;
 Atm_button masterSwitch;
 
+enum state{IDLE, STOPPED,RAISE,LOWERED,ERROR};
+
 // State SYSTEM Flags -----------------------------------------------------------
  bool SYSTEM_STOPPED{false};
  bool SYSTEM_CLOSED{false};
@@ -110,30 +112,95 @@ void CheckState(){
 
   if (LF1_ONLINE_OK && LF2_ONLINE_OK && LF3_ONLINE_OK && LF4_ONLINE_OK){
     if(!SYSTEM_ONLINE_OK){
-    SYSTEM_ONLINE_OK=true;
-    SYSTEM_STOPPED=false;
-    SYSTEM_CLOSED=false;
-    SYSTEM_OPENED=false;
-    SYSTEM_IN_MOTION=false;
-    Serial.println("SYSTEM ONLINE OK");
+    state = IDLE;
+    
     }
   }
   if (LF1_STOPPED && LF2_STOPPED && LF3_STOPPED && LF4_STOPPED)
   {
     if(!SYSTEM_STOPPED){
-    SYSTEM_STOPPED=true;
-    SYSTEM_CLOSED=false;
-    SYSTEM_OPENED=false;
-    SYSTEM_IN_MOTION=false;
-    Serial.println("SYSTEM STOPPED");
-    downStatusLed.trigger(downStatusLed.EVT_ON);
-    EEPROM.write(1,SYSTEM_STOPPED);
+    state = STOPPED;
+   
     }
 
   }
   if (LF1_CLOSED && LF2_CLOSED && LF3_CLOSED && LF4_CLOSED)
   {
     if (!SYSTEM_CLOSED) {
+      
+      state = LOWERED;
+     
+    } 
+  }
+
+  if (LF1_OPEN && LF2_OPEN && LF3_OPEN && LF4_OPEN)
+  {
+    if(!SYSTEM_OPENED){
+
+    state = RAISE;
+   
+    }
+  }
+  if (LF1_MOVING && LF2_MOVING & LF3_MOVING && LF4_MOVING)
+  {
+    // if(!SYSTEM_IN_MOTION){
+    // SYSTEM_IN_MOTION=true;
+    // SYSTEM_CLOSED=false;
+    // SYSTEM_OPENED=false;
+    // SYSTEM_STOPPED=false;
+    // Serial.println("SYSTEM IN MOTION");
+    // if(command==1){
+    //   downStatusLed.trigger(downStatusLed.EVT_BLINK  );
+    // }
+    // else if(command==2){
+    //   upStatusLed.trigger(upStatusLed.EVT_BLINK  );
+    // }
+    // }
+    
+  }
+
+   if (LF1_ERROR || LF2_ERROR || LF3_ERROR || LF4_ERROR){
+    if(!SYSTEM_ERROR_STATE){
+      state = ERROR;
+   
+
+    }
+   }
+  
+}
+
+void StateMachine(state STATE){
+  case IDLE:{
+
+    SYSTEM_ONLINE_OK=true;
+    SYSTEM_STOPPED=false;
+    SYSTEM_CLOSED=false;
+    SYSTEM_OPENED=false;
+    SYSTEM_IN_MOTION=false;
+    Serial.println("SYSTEM ONLINE OK");
+
+  }
+  case STOPPED:{
+
+    SYSTEM_STOPPED=true;
+    SYSTEM_CLOSED=false;
+    SYSTEM_OPENED=false;
+    SYSTEM_IN_MOTION=false;
+    Serial.println("SYSTEM STOPPED");
+    downStatusLed.trigger(downStatusLed.EVT_ON);
+    EPProm.write(1,SYSTEM_STOPPED);
+  }
+  case RAISE:{
+
+    SYSTEM_OPENED=true;
+    SYSTEM_CLOSED=false;
+    SYSTEM_IN_MOTION=false;
+    SYSTEM_STOPPED=false;
+    Serial.println("SYSTEM OPENED");
+    upStatusLed.trigger(upStatusLed.EVT_ON);
+  }
+  case LOWERED:{
+    
       SYSTEM_CLOSED=true;
       SYSTEM_OPENED=false;
       SYSTEM_IN_MOTION=false;
@@ -141,48 +208,17 @@ void CheckState(){
       Serial.print("SYSTEM CLOSED");
       Serial.println(SYSTEM_CLOSED);
       downStatusLed.trigger(downStatusLed.EVT_ON);
-    } 
-  }
 
-  if (LF1_OPEN && LF2_OPEN && LF3_OPEN && LF4_OPEN)
-  {
-    if(!SYSTEM_OPENED){
-    SYSTEM_OPENED=true;
-    SYSTEM_CLOSED=false;
-    SYSTEM_IN_MOTION=false;
-    SYSTEM_STOPPED=false;
-    Serial.println("SYSTEM OPENED");
-    upStatusLed.trigger(upStatusLed.EVT_ON);
-    }
   }
-  if (LF1_MOVING && LF2_MOVING & LF3_MOVING && LF4_MOVING)
-  {
-    if(!SYSTEM_IN_MOTION){
-    SYSTEM_IN_MOTION=true;
-    SYSTEM_CLOSED=false;
-    SYSTEM_OPENED=false;
-    SYSTEM_STOPPED=false;
-    Serial.println("SYSTEM IN MOTION");
-    if(current_command==1){
-      downStatusLed.trigger(downStatusLed.EVT_BLINK  );
-    }
-    else if(current_command==2){
-      upStatusLed.trigger(upStatusLed.EVT_BLINK  );
-    }
-    }
-    
-  }
+  case ERROR:{
 
-   if (LF1_ERROR || LF2_ERROR || LF3_ERROR || LF4_ERROR){
-    if(!SYSTEM_ERROR_STATE){
     SYSTEM_IN_MOTION=false;
     SYSTEM_CLOSED=false;
     SYSTEM_OPENED=false;
     SYSTEM_STOPPED=false;
     Serial.println("SYSTEM ERROR");
-
-    }
-   }
+  }
+  
   
 }
 
