@@ -1,6 +1,6 @@
 /**********************************************************************************
 *                                                                                 *
-*  Design Synthesis.net -r.young 6/3/2019 v1.0                                    *
+*  Design Synthesis.net -r.young 6/3/2019 v1.1                                   *
 *  Job# 1280                                                                      *
 *  JOBNAME = Laidley Skylight                                                     *
 *  Master-Controller [DS-MSTR-CTLR]                                               *
@@ -16,27 +16,6 @@
 #include <PubSubClient.h>
 #include <Automaton.h>
 #include <EEPROM.h>
-#include <LiquidCrystal_I2C.h>
-
-//(----------------------------------------------------------------------------------)
-
-#if defined(ARDUINO) && ARDUINO >= 100
-#define printByte(args)  write(args);
-#else
-#define printByte(args)  print(args,BYTE);
-#endif
-
-uint8_t bell[8]  = {0x4,0xe,0xe,0xe,0x1f,0x0,0x4};
-uint8_t note[8]  = {0x2,0x3,0x2,0xe,0x1e,0xc,0x0};
-uint8_t clock[8] = {0x0,0xe,0x15,0x17,0x11,0xe,0x0};
-uint8_t heart[8] = {0x0,0xa,0x1f,0x1f,0xe,0x4,0x0};
-uint8_t duck[8]  = {0x0,0xc,0x1d,0xf,0xf,0x6,0x0};
-uint8_t check[8] = {0x0,0x1,0x3,0x16,0x1c,0x8,0x0};
-uint8_t cross[8] = {0x0,0x1b,0xe,0x4,0xe,0x1b,0x0};
-uint8_t retarrow[8] = {	0x1,0x1,0x5,0x9,0x1f,0x8,0x4};
-
-LiquidCrystal_I2C lcd(0x27,20,4);  // set the LCD address to 0x27 for a 16 chars and 2 line display
-//(---------------------------------------------------------------------------------------------------)
 
 // *******************************************************************************
 // Pins 
@@ -105,6 +84,8 @@ unsigned long previousMillis;
 unsigned long polling_interval = 1000;
 int position = 0;
 int current_command{0};
+enum state CURRENT_STATE;
+enum state LAST_STATE;
 
 void CheckState(){
 
@@ -112,15 +93,16 @@ void CheckState(){
 
   if (LF1_ONLINE_OK && LF2_ONLINE_OK && LF3_ONLINE_OK && LF4_ONLINE_OK){
     if(!SYSTEM_ONLINE_OK){
-    state = IDLE;
+
+      CURRENT_STATE = IDLE;
     
     }
   }
   if (LF1_STOPPED && LF2_STOPPED && LF3_STOPPED && LF4_STOPPED)
   {
     if(!SYSTEM_STOPPED){
-    state = STOPPED;
-   
+    
+      CURRENT_STATE = STOPPED;
     }
 
   }
@@ -128,7 +110,7 @@ void CheckState(){
   {
     if (!SYSTEM_CLOSED) {
       
-      state = LOWERED;
+      CURRENT_STATE = LOWERED;
      
     } 
   }
@@ -137,7 +119,7 @@ void CheckState(){
   {
     if(!SYSTEM_OPENED){
 
-    state = RAISE;
+     CURRENT_STATE = RAISE;
    
     }
   }
@@ -161,7 +143,7 @@ void CheckState(){
 
    if (LF1_ERROR || LF2_ERROR || LF3_ERROR || LF4_ERROR){
     if(!SYSTEM_ERROR_STATE){
-      state = ERROR;
+      
    
 
     }
@@ -169,56 +151,69 @@ void CheckState(){
   
 }
 
-void StateMachine(state STATE){
-  case IDLE:{
+void StateMachine(){
 
-    SYSTEM_ONLINE_OK=true;
-    SYSTEM_STOPPED=false;
-    SYSTEM_CLOSED=false;
-    SYSTEM_OPENED=false;
-    SYSTEM_IN_MOTION=false;
-    Serial.println("SYSTEM ONLINE OK");
-
-  }
-  case STOPPED:{
-
-    SYSTEM_STOPPED=true;
-    SYSTEM_CLOSED=false;
-    SYSTEM_OPENED=false;
-    SYSTEM_IN_MOTION=false;
-    Serial.println("SYSTEM STOPPED");
-    downStatusLed.trigger(downStatusLed.EVT_ON);
-    EPProm.write(1,SYSTEM_STOPPED);
-  }
-  case RAISE:{
-
-    SYSTEM_OPENED=true;
-    SYSTEM_CLOSED=false;
-    SYSTEM_IN_MOTION=false;
-    SYSTEM_STOPPED=false;
-    Serial.println("SYSTEM OPENED");
-    upStatusLed.trigger(upStatusLed.EVT_ON);
-  }
-  case LOWERED:{
-    
-      SYSTEM_CLOSED=true;
-      SYSTEM_OPENED=false;
-      SYSTEM_IN_MOTION=false;
-      SYSTEM_STOPPED=false;
-      Serial.print("SYSTEM CLOSED");
-      Serial.println(SYSTEM_CLOSED);
-      downStatusLed.trigger(downStatusLed.EVT_ON);
-
-  }
-  case ERROR:{
-
-    SYSTEM_IN_MOTION=false;
-    SYSTEM_CLOSED=false;
-    SYSTEM_OPENED=false;
-    SYSTEM_STOPPED=false;
-    Serial.println("SYSTEM ERROR");
-  }
   
+  LAST_STATE = CURRENT_STATE;
+  EEPROM.write(1,CURRENT_STATE);
+
+  switch(CURRENT_STATE)
+  {
+      case IDLE:
+
+        SYSTEM_ONLINE_OK=true;
+        SYSTEM_STOPPED=false;
+        SYSTEM_CLOSED=false;
+        SYSTEM_OPENED=false;
+        SYSTEM_IN_MOTION=false;
+        Serial.println("SYSTEM ONLINE OK");        
+        connectionLED.blink(40,2000).trigger(connectionLED.EVT_BLINK);
+        break;
+      
+      case STOPPED:
+
+        SYSTEM_STOPPED=true;
+        SYSTEM_CLOSED=false;
+        SYSTEM_OPENED=false;
+        SYSTEM_IN_MOTION=false;
+        Serial.println("SYSTEM STOPPED");
+        downStatusLed.blink(800,800).trigger(downStatusLed.EVT_BLINK);
+        upStatusLed.blink(800,800).trigger(upStatusLed.EVT_BLINK);
+        
+        break;
+      
+      case RAISE:
+
+        SYSTEM_OPENED=true;
+        SYSTEM_CLOSED=false;
+        SYSTEM_IN_MOTION=false;
+        SYSTEM_STOPPED=false;
+        Serial.println("SYSTEM OPENED");
+        upStatusLed.trigger(upStatusLed.EVT_ON);
+        downStatusLed.trigger(downStatusLed.EVT_OFF);
+        break;
+      
+      case LOWERED:
+        
+          SYSTEM_CLOSED=true;
+          SYSTEM_OPENED=false;
+          SYSTEM_IN_MOTION=false;
+          SYSTEM_STOPPED=false;
+          Serial.print("SYSTEM CLOSED");
+          downStatusLed.trigger(downStatusLed.EVT_ON);
+          upStatusLed.trigger(upStatusLed.EVT_OFF);
+          break;
+      
+      case ERROR:
+
+        SYSTEM_IN_MOTION=false;
+        SYSTEM_CLOSED=false;
+        SYSTEM_OPENED=false;
+        SYSTEM_STOPPED=false;
+        Serial.println("SYSTEM ERROR");
+       break;
+  
+  }
   
 }
 
@@ -346,17 +341,7 @@ void reconnect() {
       Serial.println("connected");
       // Once connected, publish an announcement...
       client.publish("SYS", "1");
-      connectionLED.trigger(connectionLED.EVT_ON);
-      lcd.setCursor(0,0);
-      lcd.print("Connection = OK");
-      char buffer[15];
-      sprintf(buffer,"current_command = %d ",current_command);
-       lcd.setCursor(0,1);
-     
-      lcd.print(buffer);
-      lcd.setCursor(0,2);
-
-      lcd.printByte(3);
+      connectionLED.begin(connectionLedPin).blink(40,2000).trigger(connectionLED.EVT_BLINK);
       // ... and resubscribe
       client.subscribe("STATUS");
     } else {
@@ -410,22 +395,11 @@ void setup() {
   masterSwitch.begin(masterSwitchPin);
   masterSwitch.onPress(button_change);
   masterSwitch.onRelease(button_release);
-  connectionLED.begin(connectionLedPin).blink(40,750);
+  connectionLED.begin(connectionLedPin);
   downStatusLed.begin(downStatusLedPin).blink(20,400);
   upStatusLed.begin(upStatusLedPin).blink(20,400);
 
-  lcd.init();                      // initialize the lcd 
-  lcd.backlight();
-  
-  lcd.createChar(0, bell);
-  lcd.createChar(1, note);
-  lcd.createChar(2, clock);
-  lcd.createChar(3, heart);
-  lcd.createChar(4, duck);
-  lcd.createChar(5, check);
-  lcd.createChar(6, cross);
-  lcd.createChar(7, retarrow);
-  lcd.home();
+  CURRENT_STATE = (state)EEPROM.read(1);
   
   current_command = EEPROM.read(0);
   
@@ -448,6 +422,9 @@ void loop() {
     previousMillis = currentMillis;  
     
     CheckState();
+    if(CURRENT_STATE != LAST_STATE){
+    StateMachine();
+    }
   }
 
 }
